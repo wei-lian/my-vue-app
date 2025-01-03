@@ -1,4 +1,5 @@
 # 个人博客项目
+体验地址：https://wei-lian.github.io/my-vue-app/#/
 
 这是一个使用 Vue 3 + Vite 构建的个人博客项目。
 
