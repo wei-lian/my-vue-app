@@ -40,6 +40,14 @@
         </div>
       </div>
     </div>
+    <div class="game-over-modal" v-if="gameStatus === 'lost' || gameStatus === 'won'">
+      <div class="modal-content">
+        <div class="modal-icon">{{ gameStatus === 'won' ? '🎉' : '💥' }}</div>
+        <h2>{{ gameStatus === 'won' ? '恭喜获胜!' : '游戏结束!' }}</h2>
+        <p>用时: {{ formatTime }}</p>
+        <button class="restart-btn" @click="startGame">重新开始</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -145,32 +153,82 @@ const placeMines = (firstRow, firstCol) => {
   }
 }
 
-const revealCell = (row, col) => {
-  if (board.value[row][col].isRevealed || board.value[row][col].isFlagged) return
-  
-  // 第一次点击时确保不是地雷
-  if (!gameStarted.value) {
-    gameStarted.value = true
-    ensureSafeStart(row, col)
-    startTimer()
-  }
+const gameStarted = ref(false)
 
-  // 如果点到地雷，游戏结束
-  if (board.value[row][col].isMine) {
-    revealAllMines()
-    gameOver(false)
+const startTimer = () => {
+  if (timerInterval) clearInterval(timerInterval)
+  timer.value = 0
+  timerInterval = setInterval(() => {
+    timer.value++
+  }, 1000)
+}
+
+const ensureSafeStart = (row, col) => {
+  gameStatus.value = 'playing'
+  placeMines(row, col)
+  startTimer()
+}
+
+const revealAdjacentCells = (row, col) => {
+  const { rows, cols } = difficultySettings[difficulty.value]
+  
+  // 遍历周围8个格子
+  for (let i = -1; i <= 1; i++) {
+    for (let j = -1; j <= 1; j++) {
+      const newRow = row + i
+      const newCol = col + j
+      
+      // 检查边界
+      if (newRow >= 0 && newRow < rows && 
+          newCol >= 0 && newCol < cols) {
+        const cell = board.value[newRow][newCol]
+        
+        // 如果格子未揭示且未标记
+        if (!cell.isRevealed && !cell.isFlagged) {
+          cell.isRevealed = true
+          
+          // 如果是空格子，继续递归
+          if (cell.neighborMines === 0) {
+            revealAdjacentCells(newRow, newCol)
+          }
+        }
+      }
+    }
+  }
+}
+
+const revealCell = (row, col) => {
+  const cell = board.value[row][col]
+  
+  // 如果格子已揭示或已标记，或游戏已结束，则返回
+  if (cell.isRevealed || cell.isFlagged || 
+      (gameStatus.value !== 'ready' && gameStatus.value !== 'playing')) {
     return
   }
-
+  
+  // 第一次点击
+  if (gameStatus.value === 'ready') {
+    ensureSafeStart(row, col)
+  }
+  
+  // 如果点到地雷
+  if (cell.isMine) {
+    cell.isRevealed = true
+    gameStatus.value = 'lost'
+    revealAllMines()
+    clearInterval(timerInterval)
+    return
+  }
+  
   // 揭示当前格子
-  board.value[row][col].isRevealed = true
-
+  cell.isRevealed = true
+  
   // 如果是空格子，递归揭示周围的格子
-  if (board.value[row][col].adjacentMines === 0) {
+  if (cell.neighborMines === 0) {
     revealAdjacentCells(row, col)
   }
-
-  // 检查是否胜利
+  
+  // 检查是否获胜
   checkWin()
 }
 
@@ -184,42 +242,22 @@ const revealAllMines = () => {
   }
 }
 
-const gameOver = (isWin = false) => {
-  isPlaying.value = false
-  clearInterval(timerInterval)
-  
-  const ctx = gameCanvas.value.getContext('2d')
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'
-  ctx.fillRect(0, 0, canvasSize, canvasSize)
-  ctx.fillStyle = 'white'
-  ctx.font = '30px Arial'
-  ctx.textAlign = 'center'
-  ctx.fillText(
-    isWin ? '恭喜获胜!' : '游戏结束!', 
-    canvasSize / 2, 
-    canvasSize / 2
-  )
-  
-  // 显示所有地雷位置
-  if (!isWin) {
-    revealAllMines()
-    drawBoard() // 重新绘制棋盘以显示所有地雷
-  }
-}
-
 const checkWin = () => {
-  // 检查是否所有非地雷格子都已揭示
-  for (let i = 0; i < board.value.length; i++) {
-    for (let j = 0; j < board.value[i].length; j++) {
+  const { rows, cols } = difficultySettings[difficulty.value]
+  
+  for (let i = 0; i < rows; i++) {
+    for (let j = 0; j < cols; j++) {
       const cell = board.value[i][j]
+      // 如果有非地雷格子未揭示，游戏继续
       if (!cell.isMine && !cell.isRevealed) {
-        return // 还有非地雷格子未揭示
+        return
       }
     }
   }
   
-  // 如果所有非地雷格子都已揭示，玩家获胜
-  gameOver(true)
+  // 所有非地雷格子都已揭示，游戏胜利
+  gameStatus.value = 'won'
+  clearInterval(timerInterval)
 }
 
 const flagCell = (row, col) => {
@@ -472,5 +510,96 @@ onUnmounted(() => {
 
 :root.dark .difficulty-selector button.active {
   background: #4CAF50;
+}
+
+.game-over-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 40px;
+  border-radius: 16px;
+  text-align: center;
+  animation: modalPop 0.3s ease-out;
+}
+
+@keyframes modalPop {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.modal-icon {
+  font-size: 4em;
+  margin-bottom: 20px;
+  animation: iconBounce 0.5s ease-out;
+}
+
+@keyframes iconBounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-30px);
+  }
+  60% {
+    transform: translateY(-15px);
+  }
+}
+
+.modal-content h2 {
+  font-size: 2em;
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.modal-content p {
+  font-size: 1.2em;
+  color: #666;
+  margin-bottom: 25px;
+}
+
+.modal-content .restart-btn {
+  padding: 12px 30px;
+  font-size: 1.1em;
+  border: none;
+  border-radius: 25px;
+  background: #4CAF50;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.modal-content .restart-btn:hover {
+  background: #45a049;
+  transform: translateY(-2px);
+}
+
+/* 深色模式支持 */
+:root.dark .modal-content {
+  background: #2c2c2c;
+}
+
+:root.dark .modal-content h2 {
+  color: #fff;
+}
+
+:root.dark .modal-content p {
+  color: #bbb;
 }
 </style> 
