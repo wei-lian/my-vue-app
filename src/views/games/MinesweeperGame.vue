@@ -146,47 +146,80 @@ const placeMines = (firstRow, firstCol) => {
 }
 
 const revealCell = (row, col) => {
-  const cell = board.value[row][col]
-  if (cell.isRevealed || cell.isFlagged) return
+  if (board.value[row][col].isRevealed || board.value[row][col].isFlagged) return
   
-  if (gameStatus.value === 'ready') {
-    gameStatus.value = 'playing'
-    placeMines(row, col)
-    timerInterval = setInterval(() => {
-      timer.value++
-    }, 1000)
+  // 第一次点击时确保不是地雷
+  if (!gameStarted.value) {
+    gameStarted.value = true
+    ensureSafeStart(row, col)
+    startTimer()
   }
-  
-  cell.isRevealed = true
-  
-  if (cell.isMine) {
-    gameOver()
+
+  // 如果点到地雷，游戏结束
+  if (board.value[row][col].isMine) {
+    revealAllMines()
+    gameOver(false)
     return
   }
-  
-  if (cell.neighborMines === 0) {
-    revealNeighbors(row, col)
+
+  // 揭示当前格子
+  board.value[row][col].isRevealed = true
+
+  // 如果是空格子，递归揭示周围的格子
+  if (board.value[row][col].adjacentMines === 0) {
+    revealAdjacentCells(row, col)
   }
-  
+
+  // 检查是否胜利
   checkWin()
 }
 
-const revealNeighbors = (row, col) => {
-  const { rows, cols } = difficultySettings[difficulty.value]
-  
-  for (let i = -1; i <= 1; i++) {
-    for (let j = -1; j <= 1; j++) {
-      const newRow = row + i
-      const newCol = col + j
-      if (newRow >= 0 && newRow < rows && 
-          newCol >= 0 && newCol < cols) {
-        const neighbor = board.value[newRow][newCol]
-        if (!neighbor.isRevealed && !neighbor.isFlagged) {
-          revealCell(newRow, newCol)
-        }
+const revealAllMines = () => {
+  for (let i = 0; i < board.value.length; i++) {
+    for (let j = 0; j < board.value[i].length; j++) {
+      if (board.value[i][j].isMine) {
+        board.value[i][j].isRevealed = true
       }
     }
   }
+}
+
+const gameOver = (isWin = false) => {
+  isPlaying.value = false
+  clearInterval(timerInterval)
+  
+  const ctx = gameCanvas.value.getContext('2d')
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'
+  ctx.fillRect(0, 0, canvasSize, canvasSize)
+  ctx.fillStyle = 'white'
+  ctx.font = '30px Arial'
+  ctx.textAlign = 'center'
+  ctx.fillText(
+    isWin ? '恭喜获胜!' : '游戏结束!', 
+    canvasSize / 2, 
+    canvasSize / 2
+  )
+  
+  // 显示所有地雷位置
+  if (!isWin) {
+    revealAllMines()
+    drawBoard() // 重新绘制棋盘以显示所有地雷
+  }
+}
+
+const checkWin = () => {
+  // 检查是否所有非地雷格子都已揭示
+  for (let i = 0; i < board.value.length; i++) {
+    for (let j = 0; j < board.value[i].length; j++) {
+      const cell = board.value[i][j]
+      if (!cell.isMine && !cell.isRevealed) {
+        return // 还有非地雷格子未揭示
+      }
+    }
+  }
+  
+  // 如果所有非地雷格子都已揭示，玩家获胜
+  gameOver(true)
 }
 
 const flagCell = (row, col) => {
@@ -196,28 +229,6 @@ const flagCell = (row, col) => {
   if (!cell.isRevealed) {
     cell.isFlagged = !cell.isFlagged
     remainingMines.value += cell.isFlagged ? -1 : 1
-  }
-}
-
-const gameOver = () => {
-  gameStatus.value = 'lost'
-  clearInterval(timerInterval)
-  // 显示所有地雷
-  board.value.forEach(row => {
-    row.forEach(cell => {
-      if (cell.isMine) cell.isRevealed = true
-    })
-  })
-}
-
-const checkWin = () => {
-  const allNonMinesRevealed = board.value.every(row =>
-    row.every(cell => cell.isMine ? !cell.isRevealed : cell.isRevealed)
-  )
-  
-  if (allNonMinesRevealed) {
-    gameStatus.value = 'won'
-    clearInterval(timerInterval)
   }
 }
 
