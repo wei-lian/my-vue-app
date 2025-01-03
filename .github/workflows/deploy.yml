@@ -5,6 +5,12 @@ on:
     branches:
       - main
 
+# 设置 GITHUB_TOKEN 权限
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   build:
     name: Build
