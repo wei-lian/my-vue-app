@@ -44,6 +44,38 @@ const router = createRouter({
       }
     },
     {
+      path: '/games/snake',
+      name: 'Snake',
+      component: () => import('@/views/games/SnakeGame.vue'),
+      meta: {
+        title: '贪吃蛇'
+      }
+    },
+    {
+      path: '/games/sudoku',
+      name: 'Sudoku',
+      component: () => import('@/views/games/SudokuGame.vue'),
+      meta: {
+        title: '数独'
+      }
+    },
+    {
+      path: '/games/minesweeper',
+      name: 'Minesweeper',
+      component: () => import('@/views/games/MinesweeperGame.vue'),
+      meta: {
+        title: '扫雷'
+      }
+    },
+    {
+      path: '/games',
+      name: 'Games',
+      component: () => import('@/views/Games.vue'),
+      meta: {
+        title: '游戏中心'
+      }
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',
       component: () => import('@/views/NotFound.vue'),
@@ -54,7 +86,6 @@ const router = createRouter({
   ]
 })
 
-// 路由守卫，用于动态修改页面标题
 router.beforeEach((to, from, next) => {
   document.title = `${to.meta.title} | 我的博客`
   next()
